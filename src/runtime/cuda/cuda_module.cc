@@ -138,13 +138,14 @@ class CUDAModuleNode : public runtime::ModuleNode {
     return global;
   }
 
+  // function information table.
+  std::unordered_map<std::string, FunctionInfo> fmap_;
+
  private:
   // the binary data
   std::string data_;
   // The format
   std::string fmt_;
-  // function information table.
-  std::unordered_map<std::string, FunctionInfo> fmap_;
   // The cuda source.
   std::string cuda_source_;
   // the internal modules per GPU, to be lazily initialized.
@@ -185,9 +186,44 @@ class CUDAWrappedFunc {
       }
     }
     CUstream strm = static_cast<CUstream>(CUDAThreadEntry::ThreadLocal()->stream);
+
+    auto it = m_->fmap_.find(func_name_);
+    if (it == m_->fmap_.end()) {
+      LOG(FATAL) << "cannot find function " << func_name_.c_str() << " in fmap";
+    }
+    const FunctionInfo& info = it->second;
+
+    // assume total size of arguments (w/ padding) is less than below size
+#define ALIGN_UP(ptr, align) (((uintptr_t)(ptr) + (align)-1) & ~((uintptr_t)(align)-1))
+#define MAX_BUF_SIZE 512
+    char argBuffer[MAX_BUF_SIZE];
+
+    size_t offset = 0;
+    for (int i = 0; i < (int) info.arg_types.size(); i++) {
+      // arg_type.bits: # bits in datatype
+      // arg_type.code: 0U is int, 1U is unsigned int, 2U is float, ...
+      const DLDataType arg_type = info.arg_types[i];
+      int bytes = (arg_type.bits + 7) / 8;
+
+      offset = ALIGN_UP(offset, bytes);
+      memcpy(&argBuffer[offset], void_args[i], bytes);
+      offset += bytes;
+      // printf("%s: code=%d, bits=%d, bytes=%d void_args[%d]=%p\n", func_name_.c_str(), arg_type.code, arg_type.bits, bytes, i, *void_args[i]);
+    }
+#undef ALIGN_UP
+#undef MAX_BUF_SIZE
+
+    void *config[] = {
+        CU_LAUNCH_PARAM_BUFFER_POINTER, argBuffer,
+        CU_LAUNCH_PARAM_BUFFER_SIZE,    (void*) &offset,
+        CU_LAUNCH_PARAM_END
+    };
+
+    printf("[note] launching a kernel using `extra` with arg buffer of size %ld!\n", offset);
     CUresult result = cuLaunchKernel(fcache_[device_id], wl.grid_dim(0), wl.grid_dim(1),
                                      wl.grid_dim(2), wl.block_dim(0), wl.block_dim(1),
-                                     wl.block_dim(2), wl.dyn_shmem_size, strm, void_args, nullptr);
+                                     wl.block_dim(2), wl.dyn_shmem_size, strm, nullptr, config);
+
     if (result != CUDA_SUCCESS && result != CUDA_ERROR_DEINITIALIZED) {
       const char* msg;
       cuGetErrorName(result, &msg);
@@ -206,6 +242,7 @@ class CUDAWrappedFunc {
       LOG(FATAL) << os.str();
     }
   }
+
 
  private:
   // internal module
