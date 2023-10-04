@@ -213,10 +213,10 @@ class CUDAWrappedFunc {
           printf("\r[tvm] %s: 4 byte, void_args[%d]=%d\n", func_name_.c_str(), i, *(int*)void_args[i]);
           break;
         case 8:
-          printf("\r[tvm] %s: 8 byte, void_args[%d]=%p\n", func_name_.c_str(), i, *(void**)void_args[i]);
+          printf("\r[tvm] %s: 8 byte, void_args[%d]=0x%lld\n", func_name_.c_str(), i, *(CUdeviceptr*)void_args[i]);
           break;
         default:
-          printf("\r[tvm] %s: ? bytes, void_args[%d]=%d\n", func_name_.c_str(), i, *(int*)void_args[i]);
+          printf("\r[tvm] %s: ? bytes, void_args[%d]=%c\n", func_name_.c_str(), i, *(char*)void_args[i]);
           break;
       }
 
