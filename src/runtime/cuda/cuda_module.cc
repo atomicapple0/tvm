@@ -208,7 +208,6 @@ class CUDAWrappedFunc {
       offset = ALIGN_UP(offset, bytes);
       memcpy(&argBuffer[offset], void_args[i], bytes);
       offset += bytes;
-      // printf("%s: code=%d, bits=%d, bytes=%d void_args[%d]=%p\n", func_name_.c_str(), arg_type.code, arg_type.bits, bytes, i, *void_args[i]);
     }
 #undef ALIGN_UP
 #undef MAX_BUF_SIZE
@@ -219,7 +218,6 @@ class CUDAWrappedFunc {
         CU_LAUNCH_PARAM_END
     };
 
-    printf("[note] launching a kernel using `extra` with arg buffer of size %ld!\n", offset);
     CUresult result = cuLaunchKernel(fcache_[device_id], wl.grid_dim(0), wl.grid_dim(1),
                                      wl.grid_dim(2), wl.block_dim(0), wl.block_dim(1),
                                      wl.block_dim(2), wl.dyn_shmem_size, strm, nullptr, config);
